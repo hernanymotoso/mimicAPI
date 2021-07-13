@@ -1,64 +1,75 @@
 using System;
+using System.Collections.Generic;
 using System.Data.Entity;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoMapper;
 //using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using mimiAPI.Interfaces;
 using mimiAPI.Models;
+using mimiAPI.Models.DTOs;
+using mimiAPI.Repositories;
+using mimiAPI.Utils.Types;
+using Newtonsoft.Json;
 
 namespace mimiAPI.Controllers
 {
     [Route("api/palavras")]
     public class PalavrasController : ControllerBase
     {
-        private readonly MimicContext _banco;
+        private readonly IPalavraRepository _palavraRepository;
+        private readonly IMapper _mapper;
 
-        public PalavrasController(MimicContext banco)
+        public PalavrasController(IPalavraRepository palavraRepository, IMapper mapper)
         {
-            _banco = banco;
+            _palavraRepository = palavraRepository;
+            _mapper = mapper;
         }
 
         [Route("")]
         [HttpGet]
-        public IActionResult ObterTodas(DateTime? date, int? pagNumero, int? pagRegistroPag)
+        public IActionResult ObterTodas([FromQuery]PalavraUrlQuery query)
         {
-            var item = _banco.Palavras.AsQueryable();
-            if (date.HasValue)
+            var item = _palavraRepository.ObterPalavras(query);
+            
+            if (query.PagNumero > item.Paginacao.TotalPaginas)
             {
-                item = item.Where(p => p.Criado > date.Value || p.Atualizado > date.Value);
+                return NotFound();
             }
+            Response.Headers.Add("X-Pagination", JsonConvert.SerializeObject(item.Paginacao));
 
-            if (pagNumero.HasValue)
-            {
-               if(pagRegistroPag.HasValue)
-                    item = item.Skip((pagNumero.Value - 1) * pagRegistroPag.Value).Take(pagRegistroPag.Value);
-            }
-
-            return new JsonResult(item);
+            return new JsonResult(item.ToList());
         }
 
         [Route("{id}")]
         [HttpGet]
         public IActionResult Obter(int id)
         {
-            var obj = _banco.Palavras.Find(id);
-
+            var obj = _palavraRepository.Obter(id);
+            
             if (obj == null)
             {
                 return NotFound();
             }
 
+            PalavraDTO palavraDTO = _mapper.Map<Palavra, PalavraDTO>(obj);
+            palavraDTO.Links = new List<LinkDTO>();
 
-            return new JsonResult(_banco.Palavras.Find(id));
+            palavraDTO.Links.Add(
+                new LinkDTO("self", $"https://localhost:5001/api/palavras/{palavraDTO.Id}", "GET")    
+            );
+           
+       
+            return new JsonResult(palavraDTO);
         }
 
         [Route("")]
         [HttpPost]
         public IActionResult Cadastrar([FromBody] Palavra palavra)
         {
-            _banco.Palavras.Add(palavra);
-            _banco.SaveChanges();
+            _palavraRepository.Cadastrar(palavra);
 
             // return CreatedResult($"/api/palavras/{palavra.Id}", palavra);
             return Created($"/api/palavras/{palavra.Id}", palavra);
@@ -69,7 +80,7 @@ namespace mimiAPI.Controllers
         [HttpPut]
         public IActionResult Atualizar(int id, [FromBody] Palavra palavra)
         {
-            var obj = _banco.Palavras.AsNoTrackingWithIdentityResolution().FirstOrDefault(p => p.Id == id);
+            var obj = _palavraRepository.Obter(id);
 
             if (obj == null)
             {
@@ -78,8 +89,8 @@ namespace mimiAPI.Controllers
             
             
             palavra.Id = id;
-            _banco.Palavras.Update(palavra);
-            _banco.SaveChanges();
+            _palavraRepository.Atualizar(palavra);
+            
             return Ok();
         }
 
@@ -87,17 +98,15 @@ namespace mimiAPI.Controllers
         [HttpDelete]
         public IActionResult Deletar(int id)
         {
-            var palavra = _banco.Palavras.Find(id);
-
+            var palavra = _palavraRepository.Obter(id);
+            
             if (palavra == null)
             {
                 return NotFound();
             }
-
-            palavra.Ativo = false;
-            _banco.Palavras.Update(palavra);
-            _banco.SaveChanges();
-
+           
+            _palavraRepository.Deletar(id);
+            
             return NoContent();
         }
     }

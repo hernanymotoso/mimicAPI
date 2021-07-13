@@ -1,10 +1,14 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using mimiAPI.Config;
+using mimiAPI.Interfaces;
 using mimiAPI.Models;
+using mimiAPI.Repositories;
 
 namespace mimiAPI
 {
@@ -20,12 +24,27 @@ namespace mimiAPI
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            #region AutoMapper-Config
+
+                var config = new MapperConfiguration(cfg =>
+                {
+                    cfg.AddProfile(new DTOMapperProfileConfig());
+                });
+                IMapper mapper = config.CreateMapper();
+                services.AddSingleton(mapper);
+
+            #endregion
+
+            /*Config data base*/
             services.AddDbContext<MimicContext>(opt =>
             {
                 opt.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"));
                 
             });
+            
             services.AddMvc(options => options.EnableEndpointRouting = false );
+            
+            services.AddScoped<IPalavraRepository, PalavraRepository>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
